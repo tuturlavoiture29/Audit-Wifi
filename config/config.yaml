@@ -1,0 +1,18 @@
+cloud:
+  enable: off
+  max_cost_eur: 0
+
+profiles:
+  default: cpu
+  cpu:
+    timebox_minutes_per_stage: 20
+  gpu:
+    timebox_minutes_per_stage: 15
+
+logging:
+  jsonl_dir: logs
+  report_dir: reports
+
+safety:
+  wpa_min_len: 8
+  wpa_max_len: 63

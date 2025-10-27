@@ -1,0 +1,69 @@
+.github/workflows/ci.yml
+name: ci
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  lint_and_smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - name: Install linters
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y shellcheck
+          python -m pip install --upgrade pip
+          pip install ruff
+      - name: Shellcheck
+        run: |
+          shellcheck scripts/*.sh scripts/**/*.sh || true
+      - name: Ruff (Python)
+        run: |
+          ruff check scripts || true
+      - name: Smoke test env script (no GPU required)
+        run: |
+          bash scripts/env_check.sh --no-strict
+```
+
+```bash
+.gitignore
+# Python
+__pycache__/
+*.pyc
+
+# Logs & artifacts
+logs/
+artifacts/
+reports/
+!logs/.gitkeep
+!artifacts/.gitkeep
+!reports/.gitkeep
+
+# Potfile (Hashcat)
+*.potfile
+
+# OS/editor
+.DS_Store
+.idea/
+.vscode/
+```
+
+````bash
+README.md
+# audit-wifi — Sprint 0
+
+Objectif Sprint 0 : ossature propre (repo, CI minimale, journalisation JSON, potfile unique) pour lancer PSK S1→S2 au Sprint 1.
+
+## Démarrage rapide
+```bash
+bash scripts/env_check.sh
+bash scripts/run_plan.sh --profile cpu --mode psk \\
+  --hash hashes/target.22000 --ssid "{SSID}" --dry-run

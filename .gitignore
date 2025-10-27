@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.pyc
+
+# Logs & artifacts
+logs/
+artifacts/
+reports/
+!logs/.gitkeep
+!artifacts/.gitkeep
+!reports/.gitkeep
+
+# Potfile (Hashcat)
+*.potfile
+
+# Hashes & captures (NE PAS versionner)
+hashes/
+captures/
+*.cap
+*.pcap
+
+# OS/editor
+.DS_Store
+.idea/
+.vscode/
