@@ -1,18 +1,33 @@
-cloud:
-  enable: off
-  max_cost_eur: 0
+# Audit-Wifi configuration template
+paths:
+  root: /opt/audit-wifi
+  lists: ./lists
+  hashes: ./hashes
+  logs: ./logs
+  potfile: ./potfile.txt
 
 profiles:
-  default: cpu
-  cpu:
-    timebox_minutes_per_stage: 20
-  gpu:
-    timebox_minutes_per_stage: 15
+  fast:
+    description: "Quick reconnaissance and common-word attacks"
+    timebox_minutes_per_stage: 10
+  balanced:
+    description: "Balanced coverage with extended wordlists"
+    timebox_minutes_per_stage: 30
+  thorough:
+    description: "Exhaustive attempts including mask and rule chains"
+    timebox_minutes_per_stage: 60
 
-logging:
-  jsonl_dir: logs
-  report_dir: reports
+safe_mode: true
+safe_windows:
+  - "22:00-06:00"
+  - "12:00-13:00"
 
-safety:
-  wpa_min_len: 8
-  wpa_max_len: 63
+gpu_enable: true
+
+encryption:
+  enabled: false
+  method: openssl
+  cipher: aes-256-cbc
+  key_file: config/keys/master.key
+  iv_file: config/keys/master.iv
+  passphrase_env: AUDIT_WIFI_ENCRYPTION_PASSPHRASE

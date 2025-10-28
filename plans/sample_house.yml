@@ -1,0 +1,26 @@
+# Sample operation plan for a residential assessment
+profile: balanced
+
+targets:
+  - ssid: "Household_2G"
+    bssid: "00:11:22:33:44:55"
+    handshake_path: captures/household_2g.hccapx
+    notes: "Baseline WPA2 PSK test using balanced profile"
+
+  - ssid: "Household_5G"
+    bssid: "00:11:22:33:44:66"
+    handshake_path: captures/household_5g.hccapx
+    profile_override: fast
+    notes: "Quick check for 5 GHz network while residents are away"
+
+  - ssid: "Guest_Network"
+    bssid: "00:11:22:33:44:77"
+    handshake_path: captures/guest_network.hccapx
+    profile_override: thorough
+    notes: "Extended audit requested by homeowner for guest access"
+
+schedule:
+  start: "2024-07-01T09:00:00Z"
+  end: "2024-07-01T17:00:00Z"
+  maintenance_windows:
+    - "12:00-13:00"
