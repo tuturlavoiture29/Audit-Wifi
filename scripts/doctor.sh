@@ -9,35 +9,189 @@ root_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 results_path=${AUDIT_WIFI_RESULTS_DIR:-"$root_dir/reports"}
 mkdir -p "$results_path"
 
+declare -a output_lines=()
+log() {
+  local line="$1"
+  echo "$line"
+  output_lines+=("$line")
+}
+
+add_blank() {
+  log ""
+}
+
 declare -a summary_lines=()
 add_summary() {
   summary_lines+=("$1")
 }
 
+uname_out=$(uname -s 2>/dev/null || echo unknown)
+is_windows=false
+case "$uname_out" in
+  *MINGW*|*MSYS*|*CYGWIN*|*Windows*) is_windows=true ;;
+  *) is_windows=false ;;
+esac
+
+# Convert potential Windows style paths to POSIX paths if possible
+to_posix_path() {
+  local candidate="$1"
+  if have_cmd cygpath; then
+    local converted
+    if converted=$(cygpath "$candidate" 2>/dev/null); then
+      printf '%s' "$converted"
+      return 0
+    fi
+  fi
+  case "$candidate" in
+    [A-Za-z]:\\*)
+      local drive rest
+      drive=${candidate:0:1}
+      rest=${candidate:2}
+      rest=${rest//\\/\/}
+      rest=${rest#/}
+      printf '/%s/%s' "${drive,,}" "$rest"
+      return 0
+      ;;
+    [A-Za-z]:/*)
+      local drive rest
+      drive=${candidate:0:1}
+      rest=${candidate:2}
+      rest=${rest//\\/\/}
+      rest=${rest#/}
+      printf '/%s/%s' "${drive,,}" "$rest"
+      return 0
+      ;;
+  esac
+  printf '%s' "$candidate"
+}
+
+resolve_hashcat() {
+  local cmd
+  if cmd=$(command -v hashcat 2>/dev/null); then
+    printf '%s' "$cmd"
+    return 0
+  fi
+  if cmd=$(command -v hashcat.exe 2>/dev/null); then
+    printf '%s' "$cmd"
+    return 0
+  fi
+  local candidate
+  for candidate in "$HOME/bin/hashcat" \
+    "/c/Tools/hashcat/hashcat.exe" \
+    "C:/Tools/hashcat/hashcat.exe" \
+    "C:\\Tools\\hashcat\\hashcat.exe"; do
+    local posix
+    posix=$(to_posix_path "$candidate")
+    if [ -x "$posix" ]; then
+      printf '%s' "$posix"
+      return 0
+    fi
+  done
+  return 1
+}
+
+resolve_aircrack() {
+  local cmd
+  if cmd=$(command -v aircrack-ng 2>/dev/null); then
+    printf '%s' "$cmd"
+    return 0
+  fi
+  if cmd=$(command -v aircrack-ng.exe 2>/dev/null); then
+    printf '%s' "$cmd"
+    return 0
+  fi
+  local candidate
+  for candidate in "/c/Tools/aircrack-ng/bin/aircrack-ng.exe" \
+    "C:/Tools/aircrack-ng/bin/aircrack-ng.exe" \
+    "C:\\Tools\\aircrack-ng\\bin\\aircrack-ng.exe"; do
+    local posix
+    posix=$(to_posix_path "$candidate")
+    if [ -x "$posix" ]; then
+      printf '%s' "$posix"
+      return 0
+    fi
+  done
+  return 1
+}
+
+ts=$(date +%Y%m%d-%H%M%S)
+report_path="$results_path/doctor-$ts.txt"
+
 hashcat_ok=false
-if have_cmd hashcat; then
-  if hashcat -I >/dev/null 2>&1; then
-    hashcat_ok=true
-    add_summary "hashcat: OK"
+hashcat_path=""
+hashcat_version=""
+hashcat_gpu_info=""
+if hashcat_path=$(resolve_hashcat); then
+  add_summary "hashcat: found at $hashcat_path"
+  if hashcat_version=$("$hashcat_path" -V 2>&1); then
+    add_summary "hashcat version: $hashcat_version"
   else
-    add_summary "hashcat: FAIL (hashcat -I)"
+    add_summary "hashcat version: failed"
+    hashcat_version=""
+  fi
+  if hashcat_gpu_info=$("$hashcat_path" -I 2>&1); then
+    hashcat_ok=true
+    add_summary "hashcat diagnostic: OK"
+  else
+    add_summary "hashcat diagnostic: FAIL (hashcat -I)"
+    hashcat_gpu_info=""
   fi
 else
   add_summary "hashcat: not found"
 fi
 
+hashcat_logged=false
+if [ -n "$hashcat_version" ]; then
+  add_blank
+  log "hashcat version: $hashcat_version"
+  hashcat_logged=true
+fi
+if [ -n "$hashcat_gpu_info" ]; then
+  if [ "$hashcat_logged" = false ]; then
+    add_blank
+    hashcat_logged=true
+  fi
+  log "hashcat GPU info:"
+  gpu_lines=$(printf '%s\n' "$hashcat_gpu_info" | awk '
+    /^Device #[0-9]+/ {capture=1}
+    capture && NF==0 {capture=0; print ""; next}
+    capture {print}
+  ')
+  if [ -z "$gpu_lines" ]; then
+    gpu_lines="$hashcat_gpu_info"
+  fi
+  while IFS= read -r line; do
+    log "  $line"
+  done <<< "$gpu_lines"
+fi
+
 hcxtools_ok=false
+version_output=""
 if have_cmd hcxpcapngtool; then
   hcxtools_ok=true
-  add_summary "hcxtools (hcxpcapngtool): OK"
+  version_output=$(hcxpcapngtool --version 2>&1 || true)
+  add_summary "hcxpcapngtool: OK"
+  if [ -n "$version_output" ]; then
+    add_blank
+    log "hcxpcapngtool --version:"
+    while IFS= read -r line; do
+      log "  $line"
+    done <<< "$version_output"
+  fi
 else
-  add_summary "hcxtools (hcxpcapngtool): not found"
+  add_summary "hcxpcapngtool: not found"
 fi
 
 aircrack_ok=false
-if have_cmd aircrack-ng; then
+aircrack_path=""
+if aircrack_path=$(resolve_aircrack); then
   aircrack_ok=true
-  add_summary "aircrack-ng: OK"
+  aircrack_version=$("$aircrack_path" --help 2>&1 | head -n1 || true)
+  add_summary "aircrack-ng: found at $aircrack_path"
+  if [ -n "$aircrack_version" ]; then
+    add_blank
+    log "aircrack-ng version: $aircrack_version"
+  fi
 else
   add_summary "aircrack-ng: not found"
 fi
@@ -57,10 +211,9 @@ else
 fi
 add_summary "$cuda_message"
 
+disk_kb=0
 if df -Pk "$results_path" >/dev/null 2>&1; then
   disk_kb=$(df -Pk "$results_path" | awk 'NR==2 {print $4}')
-else
-  disk_kb=0
 fi
 
 disk_gb=$(awk -v kb="$disk_kb" 'BEGIN {printf "%.2f", kb/1048576}')
@@ -73,13 +226,6 @@ else
   add_summary "Disk space: ${disk_gb} GiB free (< ${min_disk_gb} GiB)"
 fi
 
-uname_out=$(uname -s 2>/dev/null || echo unknown)
-is_windows=false
-case "$uname_out" in
-  *MINGW*|*MSYS*|*CYGWIN*|*Windows*) is_windows=true ;;
-  *) is_windows=false ;;
-esac
-
 if $is_windows; then
   if have_cmd powershell.exe || have_cmd powershell; then
     add_summary "PowerShell: OK"
@@ -90,18 +236,14 @@ else
   add_summary "PowerShell check skipped (not Windows)"
 fi
 
-printf 'Audit-WiFi doctor summary (results: %s)\n' "$results_path"
+add_blank
+log "Audit-WiFi doctor summary (results: $results_path)"
 for line in "${summary_lines[@]}"; do
-  printf ' - %s\n' "$line"
+  log " - $line"
+
 done
 
-core_ok=true
-for flag in "$hashcat_ok" "$hcxtools_ok" "$aircrack_ok" "$disk_ok"; do
-  if [ "$flag" != "true" ]; then
-    core_ok=false
-    break
-  fi
-done
+core_ok=$hashcat_ok
 
 json=$(python3 - "$core_ok" "$hashcat_ok" "$hcxtools_ok" "$aircrack_ok" "$cuda_state" "$disk_gb" <<'PY'
 import json
@@ -129,9 +271,12 @@ print(json.dumps(payload))
 PY
 )
 
-echo "$json"
+log ""
+log "$json"
 
-if [ "$core_ok" = true ]; then
+printf '%s\n' "${output_lines[@]}" > "$report_path"
+
+if [ "$hashcat_ok" = true ]; then
   exit 0
 else
   exit 1
