@@ -201,9 +201,6 @@ if (-not $rulesRoot) {
 }
 if (-not $rulesRoot) { $rulesRoot = Join-Path $root 'rules' }
 
-$configLogExtra = @{ source = $configSource }
-if ($configPath) { $configLogExtra.config_path = $configPath }
-
 function Get-ReadableHashes {
     param([string]$Pattern)
 
@@ -460,6 +457,13 @@ $masksStage3 = ConvertTo-StringArray (Get-ConfigProperty -Config $configData -Pa
 if ($masksStage3.Count -eq 0) {
     $masksStage3 = @('?d?d?d?d?d?d?d?d', '19?d?d?d?d', '20?d?d?d?d', '?d?d?d?d?d?d!')
 }
+
+$configLogExtra = [ordered]@{ source = $configSource }
+if ($configPath) { $configLogExtra.config_path = $configPath }
+$configLogExtra.hashes_pattern = $hashesPattern
+if ($Profile) { $configLogExtra.profile = $Profile }
+$configLogExtra.timebox_per_stage_min = $TimeboxPerStageMin
+if ($masksStage3.Count -gt 0) { $configLogExtra.masks_stage3 = $masksStage3 }
 
 $stages = @()
 $stages += [pscustomobject]@{
