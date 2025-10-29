@@ -1,0 +1,36 @@
+paths:
+  root: 'C:\Audit-Wifi'
+  hashcat: 'C:\Tools\hashcat\hashcat.exe'
+  potfile: 'C:\Audit-Wifi\potfile.txt'
+  logs: 'C:\Audit-Wifi\logs'
+  reports: 'C:\Audit-Wifi\reports'
+  lists:
+    root: 'C:\Audit-Wifi\lists'
+    targeted:
+      - 'targeted_build.txt'
+      - 'targeted_arthur.txt'
+      - 'context.txt'
+    numbers_suffix: 'numbers_suf.txt'
+    smart_top: 'smart-top.txt'
+  rules:
+    root: 'C:\Audit-Wifi\rules'
+    lite: 'rules-fr-lite.rule'
+    plus: 'fr_plus.rule'
+defaults:
+  hashes: 'C:\Audit-Wifi\captures\*.22000'
+  ssid_map: ''
+  profile: 'gpu'
+timebox:
+  per_stage_min: 15
+profiles:
+  gpu: []
+  cpu:
+    - '--backend-ignore-opencl'
+    - '--opencl-device-types'
+    - '1'
+masks:
+  stage3:
+    - '?d?d?d?d?d?d?d?d'
+    - '19?d?d?d?d'
+    - '20?d?d?d?d'
+    - '?d?d?d?d?d?d!'
