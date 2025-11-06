@@ -205,6 +205,52 @@ def parse_scalar(value: str) -> Any:
     return value
 
 
+def parse_safe_windows(windows: Any) -> List[Tuple[_dt.time, _dt.time]]:
+    if windows is None:
+        return []
+    if not isinstance(windows, list):
+        raise RunPlanError(
+            "'safe_windows' must be a list of strings",
+            extra={"safe_windows": windows},
+        )
+
+    parsed: List[Tuple[_dt.time, _dt.time]] = []
+    for entry in windows:
+        if not isinstance(entry, str):
+            raise RunPlanError(
+                "Safe window entries must be strings",
+                extra={"entry": entry},
+            )
+        if "-" not in entry:
+            raise RunPlanError(
+                "Safe window must be in 'HH:MM-HH:MM' format",
+                extra={"entry": entry},
+            )
+        start_str, end_str = (part.strip() for part in entry.split("-", 1))
+        try:
+            start = _dt.datetime.strptime(start_str, "%H:%M").time()
+            end = _dt.datetime.strptime(end_str, "%H:%M").time()
+        except ValueError as exc:
+            raise RunPlanError(
+                "Safe window times must be valid 24-hour times",
+                extra={"entry": entry},
+            ) from exc
+        parsed.append((start, end))
+    return parsed
+
+
+def in_safe_window(now: _dt.datetime, windows: Iterable[Tuple[_dt.time, _dt.time]]) -> bool:
+    current = now.time()
+    for start, end in windows:
+        if start <= end:
+            if start <= current < end:
+                return True
+        else:
+            if current >= start or current < end:
+                return True
+    return False
+
+
 def has_unquoted_colon(text: str) -> bool:
     in_single = False
     in_double = False
@@ -544,6 +590,17 @@ def run(argv: Iterable[str]) -> int:
     config_data = load_yaml(config_path)
     plan_data = load_yaml(plan_path)
 
+    config_safe_mode = False
+    safe_windows: List[Tuple[_dt.time, _dt.time]] = []
+    if isinstance(config_data, dict):
+        config_safe_mode = bool(config_data.get("safe_mode"))
+        if config_safe_mode:
+            safe_windows = parse_safe_windows(config_data.get("safe_windows"))
+
+    now = _dt.datetime.now()
+    auto_safe_mode = config_safe_mode and in_safe_window(now, safe_windows)
+    safe_mode_effective = bool(args.safe_mode or auto_safe_mode)
+
     logging_cfg = config_data.get("logging", {}) if isinstance(config_data, dict) else {}
     jsonl_dir = logging_cfg.get("jsonl_dir", "logs")
     logs_path = resolve_path(repo_root, jsonl_dir)
@@ -576,7 +633,7 @@ def run(argv: Iterable[str]) -> int:
                 locks_dir=locks_dir,
                 versions=versions,
                 resume=args.resume,
-                safe_mode=args.safe_mode,
+                safe_mode=safe_mode_effective,
             )
         except RunPlanError as exc:
             errors.append(exc)
