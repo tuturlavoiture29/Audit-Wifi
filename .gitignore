@@ -14,10 +14,11 @@ reports/
 *.potfile
 
 # Hashes & captures (NE PAS versionner)
-hashes/
+hashes/*
 captures/
 *.cap
 *.pcap
+!hashes/.gitkeep
 
 # OS/editor
 .DS_Store
