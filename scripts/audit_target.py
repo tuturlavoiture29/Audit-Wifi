@@ -33,7 +33,7 @@ POTFILE_PATH = REPO_ROOT / "potfile.txt"
 def prompt(message: str, *, default: Optional[str] = None) -> str:
     """Prompt the user and return the response (or default when empty)."""
 
-    if default:
+    if default and "[" not in message:
         prompt_text = f"{message} [{default}] "
     else:
         prompt_text = f"{message} "
@@ -307,7 +307,9 @@ def show_summary(hash_path: Path) -> None:
 def main() -> int:
     ensure_directories()
 
-    target_id = prompt("Identifiant de la cible (ex. livbag)").strip()
+    target_id = prompt(
+        "Nom de la cible (par ex. le nom du fichier dans hashes/, sans .hc22000. Exemple : livbag) :"
+    ).strip()
     if not target_id:
         print("Aucune cible fournie, arrêt.")
         return 1
@@ -315,25 +317,41 @@ def main() -> int:
     hash_path = HASHES_DIR / f"{target_id}.hc22000"
     if not hash_path.exists():
         if not convert_capture(target_id, hash_path):
-            print("Fichier hash requis absent. Arrêt.")
+            print(
+                "Impossible de poursuivre sans hash 22000. "
+                "Assurez-vous d'avoir un fichier dans hashes/<cible>.hc22000."
+            )
             return 1
 
     wordlist_path = WORDLISTS_DIR / f"{target_id}.txt"
     if not wordlist_path.exists():
         print(
-            "Attention: la wordlist ciblée est absente. "
-            "Générez-la avec l'outil de préparation approprié avant de relancer."
+            "⚠️ Wordlist manquante : "
+            f"{WORDLISTS_DIR.relative_to(REPO_ROOT) / f'{target_id}.txt'}\n"
+            "→ Pour la générer, utilisez :\n"
+            "   scripts/build_target_wordlist.sh --src raw/ --out "
+            f"wordlists/targets/{target_id}.txt\n"
+            "Vous pouvez continuer sans, mais les attaques ciblées ne fonctionneront pas."
         )
 
     bssid, ssid = parse_hash_info(hash_path)
 
     if not bssid:
-        bssid = prompt("BSSID", default="00:00:00:00:00:00")
+        bssid = prompt(
+            "BSSID [00:00:00:00:00:00] (laissez vide pour utiliser une valeur factice)",
+            default="00:00:00:00:00:00",
+        )
     if not ssid:
         ssid = prompt("SSID", default=target_id)
 
-    channel = prompt("Canal Wi-Fi", default="1")
-    time_window = prompt("Fenêtre temporelle (timestamp-window)", default="auto")
+    channel = prompt(
+        "Canal Wi-Fi [1] (laissez vide si inconnu)",
+        default="1",
+    )
+    time_window = prompt(
+        "Fenêtre temporelle [auto] (auto = utiliser timestamp du hash)",
+        default="auto",
+    )
 
     plan = create_plan(target_id, hash_path, bssid, ssid, channel, time_window, wordlist_path)
 
@@ -345,6 +363,13 @@ def main() -> int:
     print(f"Plan écrit dans {plan_path}")
 
     rc = run_plan(plan_path)
+    print(
+        f"\n✅ Audit lancé pour la cible '{target_id}'\n"
+        f"→ Résultats dans : results/{target_id}/\n"
+        f"→ Potfile : results/{target_id}/hashcat.potfile\n"
+        f"→ Journal : results/{target_id}/logs.jsonl\n\n"
+        f"Lancez `tail -f results/{target_id}/logs.jsonl` pour suivre l'audit en direct."
+    )
     if rc == 0:
         show_summary(hash_path)
     else:
